@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Ultrasonic Target Tracker</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; padding: 20px; font-family: sans-serif; background: #f4f6f9; height: 100vh; display: flex; flex-direction: column; gap: 10px; }
+        .controls { display: flex; gap: 15px; align-items: center; background: white; padding: 10px; border-radius: 6px; }
+        
+        /* Full-screen frame container holding your tracking assets */
+        .viewport { position: relative; width: 100%; flex-grow: 1; background: #222; border-radius: 6px; overflow: hidden; }
+        
+        .gun-box { position: absolute; left: 20px; top: 50%; transform: translateY(-50%); width: 50px; height: 40px; background: #4ade80; }
+        .stickman-box { position: absolute; top: 50%; transform: translateY(-50%); width: 40px; height: 60px; background: #f87171; transition: left 0.05s linear; }
+        .threshold-line { position: absolute; top: 0; width: 4px; height: 100%; background: #38bdf8; }
+
+        /* Simplified numeric calibration line layout */
+        .numeric-scale { display: flex; justify-content: space-between; font-family: monospace; font-size: 12px; font-weight: bold; color: #334155; padding: 2px 10px 0 80px; }
+        
+        .slider-container { background: white; padding: 10px; border-radius: 6px; width: 100%; }
+        .slider-container input { width: 100%; margin: 0; }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <select id="baudrate"><option value="9600">9600</option><option value="115200">115200</option></select>
+        <button id="connectBtn">Connect Arduino</button>
+        <span>Raw: <b id="distanceDisplay">--</b> cm</span> | 
+        <span>Smooth: <b id="smoothDisplay">--</b> cm</span> |
+        <span>Thresh: <b id="threshDisplay">15</b> cm</span> | 
+        <span>Status: <b id="statusDisplay">IDLE</b></span>
+    </div>
+
+    <div class="viewport" id="viewport">
+        <div class="gun-box"></div>
+        <div class="threshold-line" id="threshLine"></div>
+        <div class="stickman-box" id="stickman"></div>
+    </div>
+
+    <!-- Clean, simple numeric alignment scale layer -->
+    <div class="numeric-scale">
+        <span>2cm</span><span>10cm</span><span>20cm</span><span>30cm</span><span>40cm</span><span>50cm</span><span>60cm</span><span>70cm</span><span>80cm</span><span>90cm</span><span>100cm</span>
+    </div>
+
+    <div class="slider-container">
+        <input type="range" id="threshSlider" min="2" max="100" value="15">
+    </div>
+
+<script>
+    let port = null, reader = null, outputStream = null, keepReading = true;
+    const MIN_CM = 2, MAX_CM = 100, SMOOTHING_FACTOR = 0.15; 
+    let currentCm = 100, smoothedCm = 100, threshCm = 15, isFiring = false;
+
+    const connectBtn = document.getElementById('connectBtn'), baudrateSelect = document.getElementById('baudrate');
+    const distanceDisplay = document.getElementById('distanceDisplay'), smoothDisplay = document.getElementById('smoothDisplay');
+    const threshDisplay = document.getElementById('threshDisplay'), statusDisplay = document.getElementById('statusDisplay');
+    const threshSlider = document.getElementById('threshSlider'), viewport = document.getElementById('viewport');
+    const stickman = document.getElementById('stickman'), threshLine = document.getElementById('threshLine');
+
+    function updatePositions() {
+        const maxTravel = viewport.clientWidth - 80 - stickman.clientWidth - 20;
+        let threshPct = (Math.max(MIN_CM, Math.min(threshCm, MAX_CM)) - MIN_CM) / (MAX_CM - MIN_CM);
+        let stickmanPct = (Math.max(MIN_CM, Math.min(smoothedCm, MAX_CM)) - MIN_CM) / (MAX_CM - MIN_CM);
+
+        threshLine.style.left = (80 + (threshPct * maxTravel)) + "px";
+        stickman.style.left = (80 + (stickmanPct * maxTravel)) + "px";
+    }
+
+    threshSlider.addEventListener('input', (e) => {
+        threshCm = parseInt(e.target.value);
+        threshDisplay.textContent = threshCm;
+        updatePositions();
+        checkTrigger();
+    });
+
+    async function connect() {
+        try {
+            port = await navigator.serial.requestPort();
+            await port.open({ baudRate: parseInt(baudrateSelect.value) });
+            connectBtn.textContent = "Disconnect";
+            keepReading = true;
+            readSerial();
+        } catch (e) { alert("Failed: " + e.message); }
+    }
+
+    async function readSerial() {
+        const decoder = new TextDecoderStream(), encoder = new TextEncoderStream();
+        port.readable.pipeTo(decoder.writable); reader = decoder.readable.getReader();
+        encoder.readable.pipeTo(port.writable); outputStream = encoder.writable.getWriter();
+        let buffer = "";
+        try {
+            while (port.readable && keepReading) {
+                const { value, done } = await reader.read();
+                if (done) break;
+                if (value) {
+                    buffer += value; let lines = buffer.split(/\r?\n/); buffer = lines.pop();
+                    for (let line of lines) {
+                        let match = line.trim().match(/\d+/);
+                        if (match) {
+                            currentCm = parseInt(match);
+                            distanceDisplay.textContent = currentCm;
+                            smoothedCm = (currentCm * SMOOTHING_FACTOR) + (smoothedCm * (1 - SMOOTHING_FACTOR));
+                            smoothDisplay.textContent = Math.round(smoothedCm);
+                            updatePositions(); checkTrigger();
+                        }
+                    }
+                }
+            }
+        } catch (e) {}
+    }
+
+    function checkTrigger() {
+        if (smoothedCm <= threshCm) {
+            if (!isFiring) { isFiring = true; statusDisplay.textContent = "FIRING"; statusDisplay.style.color = "red"; sendSignal("F"); }
+        } else {
+            if (isFiring) { isFiring = false; statusDisplay.textContent = "IDLE"; statusDisplay.style.color = "black"; sendSignal("S"); }
+        }
+    }
+
+    async function sendSignal(cmd) { if (outputStream && port) { try { await outputStream.write(cmd + "\n"); } catch (e) {} } }
+
+    async function disconnect() {
+        keepReading = false; if (isFiring) await sendSignal("S");
+        if (reader) await reader.cancel(); if (outputStream) await outputStream.cancel();
+        if (port) { try { await port.close(); } catch(e){} port = null; }
+        connectBtn.textContent = "Connect Arduino"; statusDisplay.textContent = "IDLE"; statusDisplay.style.color = "black";
+    }
+
+    connectBtn.addEventListener('click', () => port ? disconnect() : connect());
+    window.addEventListener('beforeunload', () => { if(port) { keepReading = false; sendSignal("S"); } });
+    window.addEventListener('resize', updatePositions);
+    updatePositions();
+</script>
+</body>
+</html>

@@ -1,0 +1,1428 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>AI-IoT Hand Gesture Controller</title>
+
+    <!-- =========================================================
+         TENSORFLOW.JS
+         ========================================================= -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+
+    <!-- =========================================================
+         TEACHABLE MACHINE IMAGE LIBRARY
+         ========================================================= -->
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
+
+
+    <!-- =========================================================
+         CSS
+         ========================================================= -->
+
+    <style>
+
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+
+            background: #f4f4f9;
+
+            padding: 20px;
+
+            margin: 0;
+
+            color: #333;
+        }
+
+
+        .container {
+
+            max-width: 650px;
+
+            margin: auto;
+
+            background: white;
+
+            padding: 30px;
+
+            border-radius: 15px;
+
+            box-shadow:
+                0 5px 20px rgba(0, 0, 0, 0.12);
+        }
+
+
+        h1 {
+            margin-top: 0;
+
+            color: #222;
+        }
+
+
+        h2 {
+            margin-bottom: 25px;
+
+            color: #333;
+        }
+
+
+        hr {
+
+            border: none;
+
+            border-top: 1px solid #ddd;
+
+            margin: 30px 0;
+        }
+
+
+        /* =====================================================
+           BUTTON
+           ===================================================== */
+
+        button {
+
+            background: #007bff;
+
+            color: white;
+
+            border: none;
+
+            padding: 12px 24px;
+
+            font-size: 16px;
+
+            border-radius: 7px;
+
+            cursor: pointer;
+
+            margin: 10px;
+        }
+
+
+        button:hover {
+
+            background: #0056b3;
+        }
+
+
+        button:disabled {
+
+            background: #777;
+
+            cursor: not-allowed;
+        }
+
+
+        /* =====================================================
+           INPUT
+           ===================================================== */
+
+        input {
+
+            padding: 12px;
+
+            width: 80%;
+
+            max-width: 500px;
+
+            border: 1px solid #ccc;
+
+            border-radius: 6px;
+
+            font-size: 15px;
+
+            outline: none;
+        }
+
+
+        input:focus {
+
+            border-color: #007bff;
+        }
+
+
+        /* =====================================================
+           SERIAL STATUS
+           ===================================================== */
+
+        #serialStatus {
+
+            display: block;
+
+            margin-top: 5px;
+
+            color: gray;
+
+            font-weight: bold;
+        }
+
+
+        .connected {
+
+            color: #28a745 !important;
+        }
+
+
+        .disconnected {
+
+            color: gray !important;
+        }
+
+
+        .error {
+
+            color: #dc3545 !important;
+        }
+
+
+        /* =====================================================
+           WEBCAM
+           ===================================================== */
+
+        #webcam-container {
+
+            margin: 25px auto;
+
+            border: 4px solid #333;
+
+            width: 208px;
+
+            height: 208px;
+
+            border-radius: 10px;
+
+            display: flex;
+
+            align-items: center;
+
+            justify-content: center;
+
+            background: #eee;
+
+            overflow: hidden;
+        }
+
+
+        #webcam-container canvas {
+
+            width: 200px;
+
+            height: 200px;
+
+            display: block;
+        }
+
+
+        /* =====================================================
+           AI STATUS
+           ===================================================== */
+
+        #status {
+
+            font-size: 22px;
+
+            font-weight: bold;
+
+            color: #28a745;
+
+            margin: 20px 0;
+        }
+
+
+        .status-loading {
+
+            color: #ff9800 !important;
+        }
+
+
+        .status-error {
+
+            color: #dc3545 !important;
+        }
+
+
+        .status-live {
+
+            color: #28a745 !important;
+        }
+
+
+        /* =====================================================
+           PREDICTION LABELS
+           ===================================================== */
+
+        #label-container {
+
+            margin-top: 20px;
+        }
+
+
+        #label-container div {
+
+            margin: 8px 0;
+
+            font-size: 18px;
+
+            font-weight: bold;
+
+            padding: 8px;
+
+            background: #f1f1f1;
+
+            border-radius: 6px;
+        }
+
+
+        /* =====================================================
+           LOADED CLASSES
+           ===================================================== */
+
+        #classes-container {
+
+            margin-top: 25px;
+
+            padding: 15px;
+
+            background: #f8f9fa;
+
+            border-radius: 8px;
+
+            border: 1px solid #ddd;
+        }
+
+
+        #classes-container h3 {
+
+            margin-top: 0;
+        }
+
+
+        #loadedClasses {
+
+            font-weight: bold;
+
+            color: #007bff;
+        }
+
+
+        /* =====================================================
+           ARDUINO COMMAND
+           ===================================================== */
+
+        #arduinoCommand {
+
+            margin-top: 20px;
+
+            font-size: 18px;
+
+            font-weight: bold;
+        }
+
+
+        /* =====================================================
+           INFO BOX
+           ===================================================== */
+
+        .info {
+
+            margin-top: 20px;
+
+            padding: 12px;
+
+            background: #eef5ff;
+
+            border-radius: 7px;
+
+            font-size: 14px;
+
+            color: #444;
+        }
+
+    </style>
+
+</head>
+
+
+<body>
+
+
+<div class="container">
+
+
+    <!-- =====================================================
+         TITLE
+         ===================================================== -->
+
+    <h1>🤖 AI + IoT</h1>
+
+    <h2>Hand Gesture Controller</h2>
+
+
+    <!-- =====================================================
+         ARDUINO SECTION
+         ===================================================== -->
+
+    <h3>🔌 Arduino Connection</h3>
+
+
+    <button
+        id="connectBtn"
+        onclick="connectSerial()">
+
+        🔌 Connect Arduino Uno
+
+    </button>
+
+
+    <span
+        id="serialStatus"
+        class="disconnected">
+
+        Not Connected
+
+    </span>
+
+
+    <hr>
+
+
+    <!-- =====================================================
+         MODEL URL SECTION
+         ===================================================== -->
+
+    <h3>🧠 Teachable Machine Model</h3>
+
+
+    <p>
+
+        Paste your Teachable Machine
+        <b>shareable model link</b> below:
+
+    </p>
+
+
+    <input
+        type="text"
+        id="modelUrl"
+        placeholder="https://teachablemachine.withgoogle.com/models/..."
+    >
+
+
+    <br>
+
+
+    <button
+        id="cameraBtn"
+        onclick="initAI()">
+
+        🚀 Start AI Camera
+
+    </button>
+
+
+    <!-- =====================================================
+         WEBCAM
+         ===================================================== -->
+
+    <div id="webcam-container">
+
+        Camera will appear here
+
+    </div>
+
+
+    <!-- =====================================================
+         AI STATUS
+         ===================================================== -->
+
+    <div id="status">
+
+        AI Status: Ready
+
+    </div>
+
+
+    <!-- =====================================================
+         LOADED CLASSES
+         ===================================================== -->
+
+    <div id="classes-container">
+
+        <h3>📋 Model Classes</h3>
+
+        <div id="loadedClasses">
+
+            No model loaded
+
+        </div>
+
+    </div>
+
+
+    <!-- =====================================================
+         PREDICTIONS
+         ===================================================== -->
+
+    <div id="label-container">
+
+    </div>
+
+
+    <!-- =====================================================
+         ARDUINO COMMAND
+         ===================================================== -->
+
+    <div id="arduinoCommand">
+
+        Arduino Command: —
+
+    </div>
+
+
+    <!-- =====================================================
+         INFORMATION
+         ===================================================== -->
+
+    <div class="info">
+
+        <b>Gesture Mapping</b>
+
+        <br><br>
+
+        <b>heart</b> → Arduino sends <b>1</b>
+
+        <br>
+
+        <b>none</b> → Arduino sends <b>0</b>
+
+    </div>
+
+
+</div>
+
+
+
+<!-- =========================================================
+     JAVASCRIPT
+     ========================================================= -->
+
+<script>
+
+
+    // =========================================================
+    // GLOBAL VARIABLES
+    // =========================================================
+
+    let model = null;
+
+    let webcam = null;
+
+    let labelContainer = null;
+
+    let maxPredictions = 0;
+
+    let classNames = [];
+
+
+    // =========================================================
+    // SERIAL VARIABLES
+    // =========================================================
+
+    let serialPort = null;
+
+    let serialWriter = null;
+
+    let lastCommand = null;
+
+
+    // =========================================================
+    // CONNECT ARDUINO
+    // =========================================================
+
+    async function connectSerial() {
+
+
+        // -----------------------------------------------------
+        // CHECK WEB SERIAL SUPPORT
+        // -----------------------------------------------------
+
+        if (!("serial" in navigator)) {
+
+            alert(
+                "Web Serial API is not supported.\n\n" +
+                "Please use Google Chrome or Microsoft Edge " +
+                "on a desktop/laptop."
+            );
+
+            return;
+        }
+
+
+        try {
+
+
+            // -------------------------------------------------
+            // REQUEST ARDUINO PORT
+            // -------------------------------------------------
+
+            serialPort =
+                await navigator.serial.requestPort();
+
+
+            // -------------------------------------------------
+            // OPEN SERIAL PORT
+            // -------------------------------------------------
+
+            await serialPort.open({
+
+                baudRate: 9600
+
+            });
+
+
+            // -------------------------------------------------
+            // CREATE TEXT ENCODER
+            // -------------------------------------------------
+
+            const encoder =
+                new TextEncoderStream();
+
+
+            encoder.readable.pipeTo(
+                serialPort.writable
+            );
+
+
+            // -------------------------------------------------
+            // CREATE WRITER
+            // -------------------------------------------------
+
+            serialWriter =
+                encoder.writable.getWriter();
+
+
+            // -------------------------------------------------
+            // UPDATE UI
+            // -------------------------------------------------
+
+            const status =
+                document.getElementById(
+                    "serialStatus"
+                );
+
+
+            status.innerText =
+                "✅ Arduino Connected";
+
+
+            status.className =
+                "connected";
+
+
+            const button =
+                document.getElementById(
+                    "connectBtn"
+                );
+
+
+            button.innerText =
+                "✅ Arduino Connected";
+
+
+            button.disabled = true;
+
+
+            console.log(
+                "Arduino connected successfully."
+            );
+
+
+        }
+
+        catch (error) {
+
+
+            console.error(
+                "Arduino connection error:",
+                error
+            );
+
+
+            const status =
+                document.getElementById(
+                    "serialStatus"
+                );
+
+
+            status.innerText =
+                "❌ Connection Failed";
+
+
+            status.className =
+                "error";
+
+
+            alert(
+                "Could not connect to Arduino.\n\n" +
+
+                "Make sure:\n" +
+
+                "1. Arduino is connected\n" +
+
+                "2. Correct USB port is selected\n" +
+
+                "3. Arduino Serial Monitor is closed\n" +
+
+                "4. No other program is using the port"
+            );
+
+        }
+
+    }
+
+
+
+    // =========================================================
+    // INITIALIZE AI
+    // =========================================================
+
+    async function initAI() {
+
+
+        // -----------------------------------------------------
+        // GET MODEL URL
+        // -----------------------------------------------------
+
+        let urlInput =
+            document
+                .getElementById("modelUrl")
+                .value
+                .trim();
+
+
+        // -----------------------------------------------------
+        // CHECK URL
+        // -----------------------------------------------------
+
+        if (!urlInput) {
+
+            alert(
+                "Please paste your Teachable Machine model link!"
+            );
+
+            return;
+        }
+
+
+        // -----------------------------------------------------
+        // ADD TRAILING SLASH
+        // -----------------------------------------------------
+
+        if (!urlInput.endsWith("/")) {
+
+            urlInput += "/";
+
+        }
+
+
+        // -----------------------------------------------------
+        // UPDATE STATUS
+        // -----------------------------------------------------
+
+        const status =
+            document.getElementById(
+                "status"
+            );
+
+
+        status.innerText =
+            "⏳ Loading AI Model...";
+
+
+        status.className =
+            "status-loading";
+
+
+        const cameraButton =
+            document.getElementById(
+                "cameraBtn"
+            );
+
+
+        cameraButton.disabled = true;
+
+
+        try {
+
+
+            // =================================================
+            // CACHE BUSTER
+            // =================================================
+
+            /*
+                IMPORTANT:
+
+                This prevents the browser from
+                loading an old model.json or
+                metadata.json from cache.
+            */
+
+            const cacheBuster =
+                "?v=" + Date.now();
+
+
+            const checkpointURL =
+                urlInput +
+                "model.json" +
+                cacheBuster;
+
+
+            const metadataURL =
+                urlInput +
+                "metadata.json" +
+                cacheBuster;
+
+
+            console.log(
+                "================================"
+            );
+
+
+            console.log(
+                "LOADING TEACHABLE MACHINE MODEL"
+            );
+
+
+            console.log(
+                "================================"
+            );
+
+
+            console.log(
+                "Model URL:",
+                checkpointURL
+            );
+
+
+            console.log(
+                "Metadata URL:",
+                metadataURL
+            );
+
+
+            // =================================================
+            // LOAD MODEL
+            // =================================================
+
+            model =
+                await tmImage.load(
+                    checkpointURL,
+                    metadataURL
+                );
+
+
+            console.log(
+                "Model loaded successfully."
+            );
+
+
+            // =================================================
+            // GET CLASS INFORMATION
+            // =================================================
+
+            maxPredictions =
+                model.getTotalClasses();
+
+
+            /*
+                Teachable Machine model
+                exposes the class names.
+            */
+
+            if (
+                typeof model.getClassLabels ===
+                "function"
+            ) {
+
+                classNames =
+                    model.getClassLabels();
+
+            }
+
+
+            console.log(
+                "Number of classes:",
+                maxPredictions
+            );
+
+
+            console.log(
+                "Loaded classes:",
+                classNames
+            );
+
+
+            // =================================================
+            // DISPLAY CLASSES
+            // =================================================
+
+            const loadedClasses =
+                document.getElementById(
+                    "loadedClasses"
+                );
+
+
+            if (
+                classNames.length > 0
+            ) {
+
+                loadedClasses.innerText =
+                    classNames.join("  |  ");
+
+            }
+
+            else {
+
+                loadedClasses.innerText =
+                    "Classes loaded: " +
+                    maxPredictions;
+
+            }
+
+
+            // =================================================
+            // START CAMERA
+            // =================================================
+
+            status.innerText =
+                "📷 Starting Webcam...";
+
+
+            webcam =
+                new tmImage.Webcam(
+                    200,
+                    200,
+                    true
+                );
+
+
+            await webcam.setup();
+
+
+            await webcam.play();
+
+
+            // =================================================
+            // ADD CAMERA TO PAGE
+            // =================================================
+
+            const webcamContainer =
+                document.getElementById(
+                    "webcam-container"
+                );
+
+
+            webcamContainer.innerHTML = "";
+
+
+            webcamContainer.appendChild(
+                webcam.canvas
+            );
+
+
+            // =================================================
+            // CREATE LABEL CONTAINERS
+            // =================================================
+
+            labelContainer =
+                document.getElementById(
+                    "label-container"
+                );
+
+
+            labelContainer.innerHTML = "";
+
+
+            for (
+                let i = 0;
+                i < maxPredictions;
+                i++
+            ) {
+
+
+                const div =
+                    document.createElement(
+                        "div"
+                    );
+
+
+                if (
+                    classNames[i]
+                ) {
+
+                    div.innerText =
+                        classNames[i] +
+                        ": 0%";
+
+                }
+
+                else {
+
+                    div.innerText =
+                        "Class " +
+                        i +
+                        ": 0%";
+
+                }
+
+
+                labelContainer.appendChild(
+                    div
+                );
+
+            }
+
+
+            // =================================================
+            // AI READY
+            // =================================================
+
+            status.innerText =
+                "🟢 AI System Live";
+
+
+            status.className =
+                "status-live";
+
+
+            cameraButton.innerText =
+                "🟢 AI Camera Running";
+
+
+            console.log(
+                "AI system started."
+            );
+
+
+            // =================================================
+            // START PREDICTION LOOP
+            // =================================================
+
+            window.requestAnimationFrame(
+                loop
+            );
+
+
+        }
+
+        catch (error) {
+
+
+            console.error(
+                "================================"
+            );
+
+
+            console.error(
+                "MODEL LOAD ERROR"
+            );
+
+
+            console.error(
+                error
+            );
+
+
+            console.error(
+                "================================"
+            );
+
+
+            status.innerText =
+                "❌ Model Load Error";
+
+
+            status.className =
+                "status-error";
+
+
+            cameraButton.disabled =
+                false;
+
+
+            cameraButton.innerText =
+                "🚀 Start AI Camera";
+
+
+            alert(
+                "Could not load the AI model.\n\n" +
+
+                "Check:\n" +
+
+                "• Teachable Machine URL\n" +
+
+                "• Internet connection\n" +
+
+                "• Camera permission\n" +
+
+                "• Browser console for errors"
+            );
+
+        }
+
+    }
+
+
+
+    // =========================================================
+    // MAIN AI LOOP
+    // =========================================================
+
+    async function loop() {
+
+
+        if (!webcam) {
+
+            return;
+
+        }
+
+
+        // -----------------------------------------------------
+        // UPDATE CAMERA
+        // -----------------------------------------------------
+
+        webcam.update();
+
+
+        // -----------------------------------------------------
+        // PREDICT
+        // -----------------------------------------------------
+
+        await predict();
+
+
+        // -----------------------------------------------------
+        // CONTINUE LOOP
+        // -----------------------------------------------------
+
+        window.requestAnimationFrame(
+            loop
+        );
+
+    }
+
+
+
+    // =========================================================
+    // AI PREDICTION
+    // =========================================================
+
+    async function predict() {
+
+
+        if (
+            !model ||
+            !webcam
+        ) {
+
+            return;
+
+        }
+
+
+        // -----------------------------------------------------
+        // GET PREDICTIONS
+        // -----------------------------------------------------
+
+        const prediction =
+            await model.predict(
+                webcam.canvas
+            );
+
+
+        let highestProbability = 0;
+
+        let winningClass = "";
+
+
+
+        // =====================================================
+        // PROCESS ALL CLASSES
+        // =====================================================
+
+        for (
+            let i = 0;
+            i < maxPredictions;
+            i++
+        ) {
+
+
+            const score =
+                prediction[i]
+                    .probability;
+
+
+            const className =
+                prediction[i]
+                    .className;
+
+
+            // -------------------------------------------------
+            // DISPLAY SCORE
+            // -------------------------------------------------
+
+            labelContainer
+                .childNodes[i]
+                .innerText =
+
+                    className +
+                    ": " +
+                    (score * 100)
+                        .toFixed(0) +
+                    "%";
+
+
+            // -------------------------------------------------
+            // FIND HIGHEST SCORE
+            // -------------------------------------------------
+
+            if (
+                score >
+                highestProbability
+            ) {
+
+
+                highestProbability =
+                    score;
+
+
+                winningClass =
+                    className;
+
+            }
+
+        }
+
+
+
+        // =====================================================
+        // DISPLAY AI RESULT
+        // =====================================================
+
+        document.getElementById(
+            "status"
+        ).innerText =
+
+            "AI: " +
+            winningClass +
+            " (" +
+            (highestProbability * 100)
+                .toFixed(0) +
+            "%)";
+
+
+
+        // =====================================================
+        // ARDUINO CONTROL
+        // =====================================================
+
+        if (
+            highestProbability >= 0.85 &&
+            serialWriter
+        ) {
+
+
+            let command =
+                null;
+
+
+            const normalizedClass =
+                winningClass
+                    .trim()
+                    .toLowerCase();
+
+
+
+            // =================================================
+            // OK
+            // =================================================
+
+            if (
+                normalizedClass ===
+                "heart"
+            ) {
+
+                command = "1";
+
+            }
+
+
+
+            // =================================================
+            // NO
+            // =================================================
+
+            else if (
+                normalizedClass ===
+                "none"
+            ) {
+
+                command = "0";
+
+            }
+
+
+
+            // =================================================
+            // NONE
+            // =================================================
+
+
+
+
+            // =================================================
+            // SEND COMMAND
+            // =================================================
+
+            if (
+                command !== null &&
+                command !== lastCommand
+            ) {
+
+
+                try {
+
+
+                    await serialWriter.write(
+                        command
+                    );
+
+
+                    console.log(
+                        "Arduino command:",
+                        command
+                    );
+
+
+                    console.log(
+                        "Gesture:",
+                        winningClass
+                    );
+
+
+                    // -----------------------------------------
+                    // UPDATE UI
+                    // -----------------------------------------
+
+                    document.getElementById(
+                        "arduinoCommand"
+                    ).innerText =
+
+                        "Arduino Command: " +
+                        command +
+                        " (" +
+                        winningClass +
+                        ")";
+
+
+                    lastCommand =
+                        command;
+
+
+                }
+
+                catch (error) {
+
+
+                    console.error(
+                        "Serial write error:",
+                        error
+                    );
+
+
+                }
+
+            }
+
+
+            // =================================================
+            // NONE
+            // =================================================
+
+            if (
+                normalizedClass ===
+                "none"
+            ) {
+
+
+                document.getElementById(
+                    "arduinoCommand"
+                ).innerText =
+
+                    "Arduino Command: —";
+
+
+            }
+
+        }
+
+    }
+
+
+
+    // =========================================================
+    // CLOSE SERIAL CONNECTION
+    // =========================================================
+
+    window.addEventListener(
+        "beforeunload",
+        async function () {
+
+
+            try {
+
+
+                if (serialWriter) {
+
+                    await serialWriter.close();
+
+                }
+
+
+                if (serialPort) {
+
+                    await serialPort.close();
+
+                }
+
+
+            }
+
+            catch (error) {
+
+                console.error(
+                    "Serial close error:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+
+</script>
+
+
+</body>
+
+</html>
