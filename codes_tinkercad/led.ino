@@ -1,13 +1,24 @@
-// lets do it!
+// Signal Beacon Mission
+// Arduino + External LED
+
+int ledPin = 12;       // External LED connected to pin 8
 
 void setup() {
-  pinMode(13, OUTPUT); // Initialize digital pin 13 as an output
+  // Set the LED pin as OUTPUT
+  pinMode(ledPin, OUTPUT);
 }
 
-// The loop function runs over and over again forever
 void loop() {
-  digitalWrite(13, HIGH);   // Turn the LED on (HIGH is the voltage level)
-  delay(1000);              // Wait for a second (1000 milliseconds)
-  digitalWrite(13, LOW);    // Turn the LED off by making the voltage LOW
-  delay(1000);              // Wait for a second
+
+  // Turn the LED ON
+
+  // Wait
+
+  // Turn the LED OFF
+
+  // Wait
+
+  // MISSION CHALLENGE:
+  // Try changing blinkTime to create
+  // your own signal pattern.
 }

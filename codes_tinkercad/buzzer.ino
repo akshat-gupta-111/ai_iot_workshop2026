@@ -1,14 +1,29 @@
-// lets do it!
+// Tactical Alert Mission
+// Use Arduino to control a buzzer
 
-int buzzerPin = 8; // Define the digital pin connected to the buzzer
+int buzzer = 8;       // Buzzer connected to pin 9
+int alertLevel = 150; // Try changing this value
 
 void setup() {
-  pinMode(buzzerPin, OUTPUT); // Set the buzzer pin as an output
+  // Set the buzzer pin as OUTPUT
+  pinMode(buzzer, OUTPUT);
 }
 
 void loop() {
-  tone(buzzerPin, 1000);   // Play a 1000 Hz tone for 1 second
-  delay(1000);             // Wait 1 second
-  noTone(buzzerPin);       // Stop the tone
-  delay(1000);             // Wait 1 second
+
+  // Activate the buzzer
+  analogWrite(buzzer, alertLevel);
+
+  // Keep the alarm ON for some time
+  delay(500);
+
+  // Turn the buzzer OFF
+  analogWrite(buzzer, 0);
+
+  // Wait before the next alert
+  delay(500);
+
+  // TODO:
+  // Can you modify the alert pattern?
+  // Try changing the alertLevel and delays.
 }
